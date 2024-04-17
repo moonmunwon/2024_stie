@@ -1,0 +1,130 @@
+---
+title: "산업공학특론I_7주차_분산분석_실습"
+author: "Munwon Lim"
+date: "4/17/2024"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(fig.width=9, fig.height=12)
+```
+
+<br>
+<br>
+<br>
+
+## [데이터 분석]
+
+(https://github.com/psanabriaUC/BatteryDatasetImplementation/tree/master)
+
+리튬 이온 배터리의 운전 시험 데이터
+
+3개의 리튬 이온 배터리에 대하여, 특정 프로파일로 충방전 시험을 진행
+
+충방전 사이클 진행에 따라 배터리의 노화가 이루어지며, 배터리 수명 종료 (EOL) 기준까지 데이터 확보
+
+* cycle: 프로파일 운전 횟수
+* ambient_temperature: 분위기 온도
+* datetime: 일시
+* capacity: 2.7V까지 방전된 배터리 용량(Ahr)
+* voltage_measured: 배터리 단자 전압(V)
+* current_measured: 배터리 출력 전류(A)
+* temperature_measured: 배터리 온도(℃)
+* current_load: 부하에서 측정된 전류(암페어)
+* voltage_load: 부하에서 측정된 전압(볼트)
+* time: 운전 시간
+
+<br>
+<br>
+<br>
+
+### 1. 데이터 탐색 (EDA) 및 전처리
+```{r eda}
+
+# 데이터 로드
+filename <- list.files(pattern='B[0-9]')
+
+dat <- list()
+for (i in 1:length(filename)){
+  dat[[i]] <- read.csv(filename[i])
+}
+names(dat) <- gsub('.csv','',filename)
+
+# 데이터 요약
+lapply(dat,summary)
+
+# 데이터 시각화 (B0005를 대표로 실행)
+par(mfrow=c(4,2))
+for (i in c(2,4:9)){
+  plot(dat[[1]][,i], ylab=colnames(dat[[1]])[i]) 
+}
+
+# 데이터 전처리 1 - capacity 변수만 추출
+dat_merge <- Reduce(function(x, y) merge(x, y, by=c('cycle','time')), dat)
+colnames(dat_merge)
+dat_merge <- dat_merge[,c(1:2,grep('capacity',colnames(dat_merge)))]
+colnames(dat_merge)[3:5] <- names(dat)
+head(dat_merge)
+
+# 데이터 전처리 2 - cycle 단위 축소
+dat_merge <- aggregate(. ~ cycle, data=dat_merge[,-2], mean)
+
+par(mfrow=c(1,1))
+plot(NULL, xlim=range(dat_merge[,1]), ylim=range(dat_merge[,2:4]))
+for (i in 2:ncol(dat_merge)){
+  points(dat_merge[,i], col=i, pch=16)
+}
+legend('topright', legend=names(dat), col=2:4, pch=16)
+
+# 데이터 전처리 3 - ANOVA 분석 가능한 형태로 수정
+library(reshape)
+dat_merge <- melt(data = dat_merge, id.vars = 'cycle')
+head(dat_merge)
+```
+
+<br>
+
+### 2. 분산분석
+```{r anova}
+
+# 분산분석 수행
+fit <- aov(value ~ variable, data = dat_merge)
+fit
+
+# 유의차 검정
+summary(fit)
+
+# 신뢰구간 산출
+tab <- unique(predict(fit, dat_merge, interval="confidence"))
+row.names(tab) <- unique(dat_merge$variable)
+tab
+
+# 잔차 분석
+par(mfrow=c(2,2))
+plot(fit)
+
+```
+
+<br>
+
+### 3. 사후검정
+(https://url.kr/qxfrju)
+
+```{r posthoc}
+par(mfrow=c(2,1))
+
+# LSD
+library(agricolae)
+lsd_test <- LSD.test(fit, 'variable')
+lsd_test
+
+plot(lsd_test)
+
+# Tukey Test
+tukey_test <- TukeyHSD(fit)
+tukey_test
+
+plot(tukey_test)
+
+```
