@@ -1,0 +1,311 @@
+---
+title: '산업공학특론I_12주차_고급회귀분석_실습'
+author: 'Munwon Lim'
+date: '5/22/2024'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(fig.width=9, fig.height=6)
+```
+
+<br>
+<br>
+<br>
+
+
+
+## [데이터 분석]
+
+(https://www.kaggle.com/datasets/ifteshanajnin/carinsuranceclaimprediction-classification?resource=download)
+
+차량 보험 가입자에 대한 데이터로, 보험 기간, 차량의 연령, 차량 소유자의 연령, 도시의 인구 밀도, 차량의 제조사 및 모델, 출력, 엔진 유형 등의 속성을 포함
+안전도와 더불어, 보험 가입자가 향후 6개월 내에 청구를 제기하는지 여부를 기록
+
+```{r table, echo=F}
+library(knitr)
+tab <- data.frame(
+Variable = c('policy_id', 'policy_tenure', 'age_of_car', 'age_of_policyholder', 'population_density', 'make', 'segment', 'model', 'fuel_type', 'max_torque', 'max_power', 'engine_type', 'airbags', 'is_esc', 'is_adjustable_steering', 'is_tpms', 'is_parking_sensors', 'is_parking_camera', 'rear_brakes_type', 'displacement', 'cylinder', 'transmission_type', 'gear_box','steering_type', 'turning_radius', 'length', 'width', 'height', 'gross_weight', 'is_front_fog_lights', 'is_rear_window_wiper', 'is_rear_window_washer', 'is_rear_window_defogger', 'is_brake_assist', 'is_power_door_lock', 'is_central_locking', 'is_power_steering', 'is_driver_seat_height_adjustable', 'is_day_night_rear_view_mirror', 'is_ecw', 'is_speed_alert', 'ncap_rating', 'is_claim'),
+Description = c('가입자ID', '가입기간', '차량 연령(연 단위로 정규화)', '가입자 연령(연 단위로 정규화)', '가입자 거주 도시의 인구 밀도', '차량 제조사 코드', '세그먼트 (A/B1/B2/C1/C2)', '코드화된 이름', '연료 유형', '최대 토크 (Nm@rpm)', '최대 출력 (bhp@rpm)', '엔진 유형', '에어백의 수', '전자 안정성 제어(ESC) 장치 유무',  '핸들 조절 가능 유무', '타이어 압력 모니터링 시스템(TPMS) 유무', '주차 센서 유무', '주차 카메라 유무', '후방 브레이크 유형', '엔진 배기량 (cc)', '엔진에 있는 실린더 수', '변속기 유형', '기어 수','파워 스티어링 유형', '회전 시 필요 공간 (m)', '길이 (mm)', '너비 (mm)', '높이 (mm)', '최대 허용 중량 (kg)', '전방 안개등 유무', '후방 와이퍼 유무', '후방 세척기 유무', '후방 김서림 방지기 유무', '브레이크 보조 기능 유무', '파워 도어 잠금 장치 유무', '중앙 잠금 기능 유무', '파워 스티어링 유무', '운전석 높이 조절 기능 유무', '주야간 후방 미러 유무', '엔진 점검 경고등(ECW) 유무', '속도 경고 시스템 유무', '안전 점수','클레임 발생 유무'))
+kable(tab, col.names = c('변수', '설명'), caption = 'Variable Description Table')
+
+```
+
+<br>
+<br>
+<br>
+
+### 1. 데이터 탐색 (EDA) 및 전처리
+```{r eda, fig.width=9, fig.height=9}
+
+dat <- read.csv('산업공학특론I_12주차_실습 데이터.csv')
+
+# 클레임이 발생한 데이터만 추출
+table(dat$is_claim)
+dat <- dat[dat$is_claim==1,]
+summary(dat)
+
+# 필요없는 변수 삭제
+dat <- subset(dat, select=-c(policy_id, is_claim))
+colnames(dat)
+
+# 범주형 변수 전처리
+
+# 1) 연속형 변수로 코드화된 변수 처리
+dat$make <- as.factor(dat$make)
+
+# 2) 이진 변수는 1,0 처리
+ynidx <- grep('is_',colnames(dat))
+apply(dat[,ynidx],2,unique)
+for (i in ynidx){
+  dat[,i] <- ifelse(dat[,i]=='Yes',1,0)
+}
+# 3) 다진 변수는 원-핫 인코딩
+library(caret)
+dummy <- dummyVars(~., data = dat)
+dat <- predict(dummy, newdata = dat)
+dat <- data.frame(dat)
+colnames(dat)
+
+# 트레인, 테스트셋 분할
+set.seed(0)
+trainidx <- sample(1:nrow(dat), 0.8*nrow(dat))
+trainset <- dat[trainidx,]
+testset <- dat[-trainidx,]
+
+
+# 독립변수 표준화
+# train set에서만 표준화를 진행한 후, test set에서 예측하는 것이 원칙
+# 스케일 차이가 크지 않은 경우, 종속변수의 경우에도 표준화 미진행
+# 원-핫 인코딩을 진행한 경우 표준화 미진행
+scaling <- preProcess(trainset[, -ncol(trainset)],
+                      method = c("center", "scale"))
+trainsc <- predict(scaling, trainset[, -ncol(trainset)])
+testsc <- predict(scaling, testset[, -ncol(testset)])
+
+trainsc$ncap_rating <- trainset$ncap_rating
+testsc$ncap_rating <- testset$ncap_rating
+
+
+# 상관계수 산출
+library(corrplot)
+corr <- cor(trainsc, method='pearson')
+col <- colorRampPalette(c('white','blue'))
+corrplot(abs(corr), method='color', col=col(200), type='upper',tl.cex = 0.5, tl.col='black')
+
+# 상관성 탐색
+targetcor <- corr[,ncol(corr)]
+targetcor <- targetcor[targetcor!=1 & abs(targetcor)>0.6]
+data.frame(correlation=targetcor[order(abs(targetcor), decreasing=T)])
+
+
+# 높은 상관성을 보이는 관계로 주성분분석 수행
+pca <- prcomp(trainsc[, -ncol(trainsc)])
+summary(pca) #최적 주성분 7개
+
+pca <- preProcess(trainsc[, -ncol(trainsc)], method = 'pca', ncomp=7)
+trainpca <- predict(pca, trainsc[,-ncol(trainsc)])
+testpca <- predict(pca, testsc[,-ncol(testsc)])
+
+trainpca$ncap_rating <- trainsc$ncap_rating
+testpca$ncap_rating <- testsc$ncap_rating
+
+```
+
+<br>
+
+### 2. 의사결정나무
+
+```{r dt}
+
+train_control <- trainControl(method = 'cv', number = 10)
+library(rpart)
+
+# 모델 학습
+rpart_control <- rpart.control(maxdepth=5, minsplit=2) #hyperparameter
+dt_grid <- expand.grid(.cp = seq(0.01, 0.1, by = 0.01)) 
+#complexity parameter (cp): 가지치기 수행 시 복잡도와 성능을 규제
+
+dt <- train(ncap_rating ~ ., data = trainsc, method = 'rpart', 
+            trControl = train_control, tuneGrid = dt_grid, control=rpart_control)
+dt
+
+dtpca <- train(ncap_rating ~ ., data = trainpca, method = 'rpart', 
+            trControl = train_control, tuneGrid = dt_grid, control=rpart_control)
+dtpca
+
+
+# 학습 결과
+library(rpart.plot)
+
+par(mfrow=c(1,2))
+rpart.plot(dt$finalModel)
+rpart.plot(dtpca$finalModel)
+
+```
+<br>
+
+### 3. 서포트벡터회귀
+```{r svr}
+library(e1071)
+
+# 모델 학습
+svm_grid <- expand.grid(.C = c(0.1, 1, 10), .sigma = c(0.01, 0.05, 0.1)) #hyperparameter
+# Cost (C): 이상치에 벗어나는 데이터에 대한 패널티의 정도를 규제
+# Sigma (sigma): RBF 커널을 선택하는 경우, 커널의 표준편차를 규제
+
+svr <- train(ncap_rating ~ ., data = trainsc, method = 'svmRadial',
+             trControl = train_control, tuneGrid = svm_grid) # svmLinear, svmPoly
+svr
+
+svrpca <- train(ncap_rating ~ ., data = trainpca, method = 'svmRadial',
+             trControl = train_control, tuneGrid = svm_grid) # svmLinear, svmPoly
+svrpca
+
+
+# 학습 결과
+svr$finalModel
+svrpca$finalModel
+
+```
+
+<br>
+
+### 4. 다중 퍼셉트론
+```{r mlp}
+library(nnet)
+
+# 모델 학습
+mlp_grid <- expand.grid(.size = c(1, 2, 3), .decay = c(0, 0.001, 0.01)) #hyperparameter
+# 은닉층 크기 (size): 은닉층 내 노드의 개수
+# 감쇠 계수 (decay): 과적합 방지를 위하여 가중치를 규제
+
+mlp <- train(ncap_rating~ ., data = trainsc, method = 'nnet',
+             trControl = train_control, tuneGrid = mlp_grid,
+             linout = TRUE, trace = FALSE)
+mlp
+
+mlppca <- train(ncap_rating~ ., data = trainpca, method = 'nnet',
+             trControl = train_control, tuneGrid = mlp_grid,
+             linout = TRUE, trace = FALSE)
+mlppca
+
+
+# 학습 결과
+library(NeuralNetTools)
+par(mfrow=c(1,2))
+plotnet(mlp$finalModel)
+plotnet(mlppca$finalModel)
+
+```
+
+<br>
+
+### 5. 랜덤포레스트
+
+```{r rf}
+library(randomForest)
+
+# 병렬 처리 기반 모델 학습
+library(doParallel)
+
+cl <- makeCluster(detectCores() - 1) # 병렬 처리 클러스터 생성
+registerDoParallel(cl)
+
+### 
+rf <- train(ncap_rating ~ ., data = trainsc, method = 'rf', 
+                  trControl = train_control)
+
+rfpca <- train(ncap_rating ~ ., data = trainpca, method = 'rf', 
+                  trControl = train_control)
+###
+
+stopCluster(cl) 
+registerDoSEQ() # 병렬 처리 클러스터 종료
+
+rf
+rfpca
+
+
+# 학습 결과
+par(mfrow=c(1,2))
+varImpPlot(rf$finalModel, main='Variable Importance (RF)')
+varImpPlot(rfpca$finalModel, main='Variable Importance (PCA+RF)')
+
+```
+
+<br>
+
+### 6. XGBoost
+
+```{r xgb}
+library(xgboost)
+
+# 병렬 처리 기반 모델 학습
+cl <- makeCluster(detectCores() - 1) # 병렬 처리 클러스터 생성
+registerDoParallel(cl)
+
+### 
+xgb <- train(ncap_rating ~ ., data = trainsc, method = 'xgbTree', 
+               trControl = train_control)
+
+xgbpca <- train(ncap_rating ~ ., data = trainpca, method = 'xgbTree', 
+                   trControl = train_control) 
+###
+
+stopCluster(cl) 
+registerDoSEQ() # 병렬 처리 클러스터 종료
+
+
+# 학습 결과
+xgbplot <- function(model){
+  imp <- xgb.importance(model = model$finalModel)
+  xgb.plot.importance(importance_matrix = imp)
+}
+
+par(mfrow=c(1,2))
+xgbplot(xgb)
+xgbplot(xgbpca)
+
+```
+
+<br>
+
+### 7. 모델 평가
+
+```{r eval}
+library(Metrics)
+
+evaluate <- function(model, test){
+  
+  # 학습 결과 평가
+  bestidx <- apply(model$results, 1, function(x){
+    all(x[names(model$bestTune)] == model$bestTune)})
+  result1 <- model$results[bestidx,-(1:length(model$bestTune))]
+  
+  # 예측 결과 평가
+  pred <- predict(model, newdata=test)
+  result2 <- c(mae(pred, testsc$ncap_rating), 
+              rmse(pred, testsc$ncap_rating), 
+              mse(pred, testsc$ncap_rating))
+  names(result2) <- c('MAE','RMSE','MSE')
+  print(unlist(c(result1,result2)))
+}
+
+evaluate(dt, testsc)
+evaluate(dtpca, testpca)
+
+evaluate(svr, testsc)
+evaluate(svrpca, testpca)
+
+evaluate(mlp, testsc)
+evaluate(mlppca, testpca)
+
+evaluate(rf, testsc)
+evaluate(rfpca, testpca)
+
+evaluate(xgb, testsc)
+evaluate(xgbpca, testpca)
+
+```
