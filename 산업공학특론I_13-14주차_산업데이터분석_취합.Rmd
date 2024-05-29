@@ -70,11 +70,15 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r preprocess}
 
 dat <- read.csv('산업공학특론I_13-14주차_데이터.csv')
+head(dat)
+dim(dat)
 
 # timestamp 변수 삭제
 dat <- dat[,-1]
 
 # unique값 적은 변수 살펴보기
+# temp <- c(1,1,1,2,3)
+# unique(temp)
 uniqval <- function(x){length(unique(x))} 
 dat_uniq <- apply(dat,2,uniqval)
 apply(dat[,dat_uniq<10], 2, unique) 
@@ -82,10 +86,10 @@ apply(dat[,dat_uniq<10], 2, unique)
 # setpoint 관련 변수를 면밀히 조사 
 setidx <- grep('Setpoint', colnames(dat)) 
 
-par(mfrow=c(3,5))
-for (idx in setidx){
-  plot(dat[,idx-1], dat[,idx], xlab=colnames(dat)[idx-1], ylab=colnames(dat)[idx])
-}
+# par(mfrow=c(3,5))
+# for (idx in setidx){
+#   plot(dat[,idx-1], dat[,idx], xlab=colnames(dat)[idx-1], ylab=colnames(dat)[idx])
+# }
 
 apply(dat[,setidx], 2, table)
 dat_set0 <- dat[dat[,setidx[1]]==0, ]
@@ -105,6 +109,8 @@ depidx2 <- grep('Stage2.Output', colnames(dat))
 dat$Stage1_Output <- apply(dat[,depidx1],1,mean)
 dat$Stage2_Output <- apply(dat[,depidx2],1,mean)
 dat <- dat[,-c(depidx1,depidx2)]
+head(dat)
+
 
 # 종속변수 기반 이상치 제거/보정
 library(MASS)
@@ -128,8 +134,8 @@ outlier <- function(target){ # 방법 3) Cook's distance
 dat <- dat[!(outlier(dat$Stage1_Output) & outlier(dat$Stage2_Output)),]
 
 ### 2. 이상치 보정 (평균치 또는 중앙값)
-dat[!(outlier(dat$Stage1_Output) & outlier(dat$Stage2_Output)),] <- apply(dat[(outlier(dat$Stage1_Output) & outlier(dat$Stage2_Output)),],2,mean)
-apply(dat[(outlier(dat$Stage1_Output) & outlier(dat$Stage2_Output)),],2,median)
+# dat[(outlier(dat$Stage1_Output) & outlier(dat$Stage2_Output)),] <- apply(dat[!(outlier(dat$Stage1_Output) & outlier(dat$Stage2_Output)),],2,mean)
+# apply(dat[!(outlier(dat$Stage1_Output) & outlier(dat$Stage2_Output)),],2,median)
 
 
 # 변수명 변경
@@ -161,6 +167,7 @@ testsc <- cbind(testsc, testtarget)
 
 # 상관분석
 library(corrplot)
+par(mfrow=c(1,1))
 corr <- cor(trainsc)
 col <- colorRampPalette(c('white','blue'))
 corrplot(abs(corr), method='color', col=col(200), type='upper',tl.cex = 0.5, tl.col='black')
