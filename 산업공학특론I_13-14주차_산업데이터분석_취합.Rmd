@@ -68,7 +68,7 @@ knitr::opts_chunk$set(fig.width=9, fig.height=9)
 
 * 데이터 전처리 순서 (학습, 테스트셋 분할 전후)를 꼼꼼히 살펴보고 진행할 것
 
-```{r preprocess, eval = F}
+```{r preprocess, eval=F}
 
 dat <- read.csv('산업공학특론I_13-14주차_데이터.csv')
 head(dat)
@@ -131,8 +131,8 @@ outlier <- function(target){ # 방법 3) Cook's distance
 dat <- dat[!(outlier(dat$Stage1_Output) & outlier(dat$Stage2_Output)),]
 
 ### 2. 이상치 보정 (평균치 또는 중앙값)
-dat[(outlier(dat$Stage1_Output) & outlier(dat$Stage2_Output)),] <- apply(dat[!(outlier(dat$Stage1_Output) & outlier(dat$Stage2_Output)),],2,mean)
-apply(dat[!(outlier(dat$Stage1_Output) & outlier(dat$Stage2_Output)),],2,median)
+# dat[(outlier(dat$Stage1_Output) & outlier(dat$Stage2_Output)),] <- apply(dat[!(outlier(dat$Stage1_Output) & outlier(dat$Stage2_Output)),],2,mean)
+# apply(dat[!(outlier(dat$Stage1_Output) & outlier(dat$Stage2_Output)),],2,median)
 
 
 # 변수명 변경
@@ -203,16 +203,15 @@ testsc2 <- read.csv('test_Stage2.csv')
 # PCA #
 #######
 
-
 ### Stage1
 pca1 <- prcomp(trainsc1[, -ncol(trainsc1)])
 summary(pca1) #최적 주성분 12개
 
-pca1 <- preProcess(trainsc1[, -ncol(trainsc1)], method = 'pca', ncomp=12)
-trainpca1 <- predict(pca1, trainsc1[,-ncol(trainsc1)])
+pca1 <- preProcess(trainsc1[, -ncol(trainsc1)], method = 'pca')
+trainpca1 <- predict(pca1, trainsc1[,-ncol(trainsc1)])[,1:12]
 trainpca1 <- cbind(trainpca1, trainsc1[,ncol(trainsc1)])
 
-testpca1 <- predict(pca1, testsc1[,-ncol(testsc1)])
+testpca1 <- predict(pca1, testsc1[,-ncol(testsc1)])[,1:12]
 testpca1 <- cbind(testpca1, testsc1[,ncol(testsc1)])
 
 colnames(trainpca1)[ncol(trainpca1)] <- colnames(testpca1)[ncol(testpca1)] <- 'Stage1_Output'
@@ -222,11 +221,11 @@ colnames(trainpca1)[ncol(trainpca1)] <- colnames(testpca1)[ncol(testpca1)] <- 'S
 pca2 <- prcomp(trainsc2[, -ncol(trainsc2)])
 summary(pca2) #최적 주성분 14개
 
-pca2 <- preProcess(trainsc2[, -ncol(trainsc2)], method = 'pca', ncomp=14)
-trainpca2 <- predict(pca2, trainsc2[,-ncol(trainsc2)])
+pca2 <- preProcess(trainsc2[, -ncol(trainsc2)], method = 'pca')
+trainpca2 <- predict(pca2, trainsc2[,-ncol(trainsc2)])[,1:14]
 trainpca2 <- cbind(trainpca2, trainsc2[,ncol(trainsc2)])
 
-testpca2 <- predict(pca2, testsc2[,-ncol(testsc2)])
+testpca2 <- predict(pca2, testsc2[,-ncol(testsc2)])[,1:14]
 testpca2 <- cbind(testpca2, testsc2[,ncol(testsc2)])
 
 colnames(trainpca2)[ncol(trainpca2)] <- colnames(testpca2)[ncol(testpca2)] <- 'Stage2_Output'
